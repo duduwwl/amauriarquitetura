@@ -95,6 +95,12 @@ const fragmentShaderSource = `
     return start.x * start.y * end.x * end.y;
   }
 
+  float insideEdge(vec2 point, vec2 a, vec2 b, float feather) {
+    vec2 edge = b - a;
+    float distance = (edge.x * (point.y - a.y) - edge.y * (point.x - a.x)) / length(edge);
+    return smoothstep(0.0, feather, distance);
+  }
+
   void main() {
     float viewAspect = u_view.x / u_view.y;
     float imageAspect = u_image_size.x / u_image_size.y;
@@ -113,7 +119,14 @@ const fragmentShaderSource = `
 
     // The masks stay in image coordinates, so masonry, glazing and furniture
     // never wobble as the camera moves across the panorama.
-    float projectWater = softBox(point, vec2(0.29, 0.55), vec2(0.67, 0.68), 0.025);
+    // An inset five-sided mask follows only the pool surface; its stone rim
+    // remains sampled from the untouched photograph.
+    float projectWater =
+      insideEdge(point, vec2(0.31, 0.588), vec2(0.485, 0.548), 0.014) *
+      insideEdge(point, vec2(0.485, 0.548), vec2(0.645, 0.586), 0.014) *
+      insideEdge(point, vec2(0.645, 0.586), vec2(0.605, 0.646), 0.014) *
+      insideEdge(point, vec2(0.605, 0.646), vec2(0.355, 0.608), 0.014) *
+      insideEdge(point, vec2(0.355, 0.608), vec2(0.31, 0.588), 0.014);
     float heroWater = softBox(point, vec2(0.41, 0.66), vec2(0.96, 0.81), 0.035);
     float water = mix(projectWater, heroWater, isHero);
 
@@ -240,15 +253,15 @@ const startLivingScene = (canvas) => {
     }
     if (needsResize) resize();
     const elapsed = now - startedAt;
-    const frameRect = frame.getBoundingClientRect();
-    const scrollProgress = clamp((window.innerHeight - frameRect.top) / (window.innerHeight + frameRect.height));
     const openingProgress = clamp(elapsed / 13000);
     const easedOpening = openingProgress * openingProgress * (3 - 2 * openingProgress);
-    const panProgress = isHero ? 0.18 + easedOpening * 0.80 : 0.04 + scrollProgress * 0.92;
+    const rotationCycle = (elapsed / 24000) % 1;
+    const rotationProgress = 0.5 - 0.5 * Math.cos(rotationCycle * Math.PI * 2);
+    const panProgress = isHero ? 0.18 + easedOpening * 0.80 : 0.04 + rotationProgress * 0.92;
     gl.uniform1f(timeLocation, elapsed / 1000);
     gl.uniform1f(panLocation, panProgress);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
-    if (!isHero) frame.style.setProperty('--cinematic-progress', scrollProgress.toFixed(4));
+    if (!isHero) frame.style.setProperty('--cinematic-progress', rotationProgress.toFixed(4));
     canvas.classList.add('ready');
     canvas.dataset.animated = 'true';
     requestAnimationFrame(render);
