@@ -117,17 +117,19 @@ const fragmentShaderSource = `
     vec3 original = texture2D(u_image, uv).rgb;
     float isHero = step(0.5, u_scene);
 
-    // The masks stay in image coordinates, so masonry, glazing and furniture
-    // never wobble as the camera moves across the panorama.
-    // An inset five-sided mask follows only the pool surface; its stone rim
-    // remains sampled from the untouched photograph.
+    // Water is animated with light only: no pool pixel is displaced, so the
+    // coping and masonry stay perfectly aligned with the photograph.
     float projectWater =
-      insideEdge(point, vec2(0.31, 0.588), vec2(0.485, 0.548), 0.014) *
-      insideEdge(point, vec2(0.485, 0.548), vec2(0.645, 0.586), 0.014) *
-      insideEdge(point, vec2(0.645, 0.586), vec2(0.605, 0.646), 0.014) *
-      insideEdge(point, vec2(0.605, 0.646), vec2(0.355, 0.608), 0.014) *
-      insideEdge(point, vec2(0.355, 0.608), vec2(0.31, 0.588), 0.014);
-    float heroWater = softBox(point, vec2(0.41, 0.66), vec2(0.96, 0.81), 0.035);
+      insideEdge(point, vec2(0.315, 0.590), vec2(0.480, 0.545), 0.012) *
+      insideEdge(point, vec2(0.480, 0.545), vec2(0.640, 0.590), 0.012) *
+      insideEdge(point, vec2(0.640, 0.590), vec2(0.600, 0.640), 0.012) *
+      insideEdge(point, vec2(0.600, 0.640), vec2(0.355, 0.608), 0.012) *
+      insideEdge(point, vec2(0.355, 0.608), vec2(0.315, 0.590), 0.012);
+    float heroWater =
+      insideEdge(point, vec2(0.460, 0.650), vec2(0.925, 0.702), 0.012) *
+      insideEdge(point, vec2(0.925, 0.702), vec2(0.875, 0.810), 0.012) *
+      insideEdge(point, vec2(0.875, 0.810), vec2(0.490, 0.685), 0.012) *
+      insideEdge(point, vec2(0.490, 0.685), vec2(0.460, 0.650), 0.012);
     float water = mix(projectWater, heroWater, isHero);
 
     float projectLeaves =
@@ -142,7 +144,11 @@ const fragmentShaderSource = `
       softBox(point, vec2(0.62, 0.86), vec2(1.0, 1.0), 0.05);
     float leafColor = smoothstep(-0.08, 0.06, original.g - original.b) *
       (1.0 - smoothstep(0.08, 0.26, original.r - original.g));
-    float foliage = clamp(mix(projectLeaves, heroLeaves, isHero), 0.0, 1.0) * leafColor;
+    float poolProtection = mix(
+      softBox(point, vec2(0.22, 0.46), vec2(0.80, 0.76), 0.03),
+      softBox(point, vec2(0.34, 0.56), vec2(1.0, 0.91), 0.03),
+      isHero);
+    float foliage = clamp(mix(projectLeaves, heroLeaves, isHero), 0.0, 1.0) * leafColor * (1.0 - poolProtection);
 
     float skyLimit = mix(0.46, 0.19, smoothstep(0.35, 0.67, point.x));
     float clouds = isHero * (1.0 - smoothstep(skyLimit - 0.06, skyLimit, point.y)) *
@@ -151,7 +157,7 @@ const fragmentShaderSource = `
     float rippleA = sin(point.x * 96.0 + u_time * 1.75 + sin(point.y * 33.0));
     float rippleB = sin(point.x * 51.0 - u_time * 1.10 + point.y * 74.0);
     float rippleC = sin(point.y * 128.0 + u_time * 0.82);
-    vec2 motion = vec2((rippleA * 0.0020 + rippleB * 0.0011), rippleC * 0.00065) * water;
+    vec2 motion = vec2(0.0);
 
     float breeze = sin(u_time * 0.72 + point.y * 17.0) + sin(u_time * 1.08 + point.x * 13.0) * 0.42;
     motion.x += breeze * 0.0018 * foliage;
@@ -159,8 +165,8 @@ const fragmentShaderSource = `
     motion.x += clouds * (sin(u_time * 0.19 + point.y * 4.0) * 0.0030 + sin(u_time * 0.11) * 0.0012);
 
     vec3 color = texture2D(u_image, clamp(uv + motion, 0.001, 0.999)).rgb;
-    float shimmer = (sin(point.x * 118.0 - u_time * 1.6 + point.y * 29.0) * 0.5 + 0.5) * water;
-    color += vec3(0.022, 0.030, 0.033) * shimmer;
+    float shimmer = (rippleA * 0.45 + rippleB * 0.30 + rippleC * 0.25) * water;
+    color += vec3(0.025, 0.033, 0.037) * shimmer;
     gl_FragColor = vec4(color, 1.0);
   }
 `;
