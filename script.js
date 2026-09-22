@@ -108,6 +108,7 @@ const fragmentShaderSource = `
   precision highp float;
   uniform sampler2D u_image;
   uniform float u_time;
+  uniform float u_pan;
   uniform vec2 u_view;
   uniform vec2 u_image_size;
   varying vec2 v_uv;
@@ -127,6 +128,7 @@ const fragmentShaderSource = `
     }
 
     vec2 uv = (v_uv - 0.5) * cover + 0.5;
+    uv.x += (u_pan - 0.5) * (1.0 - cover.x) * 0.94;
     vec2 point = vec2(uv.x, 1.0 - uv.y);
     vec3 original = texture2D(u_image, uv).rgb;
 
@@ -137,8 +139,9 @@ const fragmentShaderSource = `
 
     float upperBranches = ellipseMask(point, vec2(0.12, 0.09), vec2(0.34, 0.16));
     float centerTree = ellipseMask(point, vec2(0.47, 0.36), vec2(0.18, 0.24));
+    float rightTree = ellipseMask(point, vec2(0.90, 0.28), vec2(0.17, 0.28));
     float foregroundGrass = ellipseMask(point, vec2(0.34, 0.88), vec2(0.48, 0.19)) * (1.0 - smoothstep(0.72, 0.90, point.x));
-    float foliage = clamp(upperBranches * 0.75 + centerTree + foregroundGrass * 0.48, 0.0, 1.0);
+    float foliage = clamp(upperBranches * 0.75 + centerTree + rightTree * 0.8 + foregroundGrass * 0.48, 0.0, 1.0);
 
     float rippleA = sin(point.x * 96.0 + u_time * 1.75 + sin(point.y * 33.0));
     float rippleB = sin(point.x * 51.0 - u_time * 1.10 + point.y * 74.0);
@@ -207,6 +210,7 @@ const startLivingScene = (canvas) => {
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
 
   const timeLocation = gl.getUniformLocation(program, 'u_time');
+  const panLocation = gl.getUniformLocation(program, 'u_pan');
   const viewLocation = gl.getUniformLocation(program, 'u_view');
   const imageSizeLocation = gl.getUniformLocation(program, 'u_image_size');
   gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
@@ -238,7 +242,13 @@ const startLivingScene = (canvas) => {
       return;
     }
     if (needsResize) resize();
-    gl.uniform1f(timeLocation, (now - startedAt) / 1000);
+    const frameRect = frame.getBoundingClientRect();
+    const panProgress = Math.min(1, Math.max(0, (window.innerHeight - frameRect.top) / (window.innerHeight + frameRect.height)));
+    const elapsed = now - startedAt;
+    const scrollPan = 0.04 + panProgress * 0.92;
+    const cameraDrift = Math.sin(elapsed / 3600) * 0.10;
+    gl.uniform1f(timeLocation, elapsed / 1000);
+    gl.uniform1f(panLocation, Math.min(0.98, Math.max(0.02, scrollPan + cameraDrift)));
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     canvas.classList.add('ready');
     canvas.dataset.animated = 'true';
