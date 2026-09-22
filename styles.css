@@ -39,7 +39,9 @@ button { font: inherit; }
 
 .hero { position: relative; min-height: 760px; height: 100svh; color: var(--white); overflow: hidden; background: var(--dark); }
 .hero > img { position: absolute; inset: 0; height: 100%; object-fit: cover; object-position: center; animation: hero-in 1.4s cubic-bezier(.2,.7,.2,1) both; }
-.hero-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,10,9,.74) 0%, rgba(8,10,9,.26) 48%, rgba(8,10,9,.18) 100%), linear-gradient(0deg, rgba(8,10,9,.52), transparent 45%); }
+.hero-canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .7s ease; }
+.hero-canvas.ready { opacity: 1; }
+.hero-shade { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(8,10,9,.74) 0%, rgba(8,10,9,.26) 48%, rgba(8,10,9,.18) 100%), linear-gradient(0deg, rgba(8,10,9,.52), transparent 45%); }
 .hero-content { position: relative; z-index: 1; width: var(--shell); height: 100%; margin: auto; padding: 190px 0 64px; display: flex; flex-direction: column; justify-content: space-between; }
 .eyebrow { display: flex; align-items: center; gap: .7rem; font-size: .76rem; font-weight: 500; text-transform: uppercase; letter-spacing: .18em; }
 .eyebrow span { width: 38px; height: 1px; background: currentColor; }
@@ -72,11 +74,11 @@ button { font: inherit; }
 .project-large figure { height: min(72vw, 820px); }
 .cinematic-frame { position: relative; isolation: isolate; background: #8c8b84; }
 .cinematic-frame::after { content: ""; position: absolute; z-index: 1; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(10,12,10,.06), transparent 52%, rgba(10,12,10,.28)); }
-.project-card .cinematic-frame :is(img, .cinematic-canvas) { position: absolute; inset: -8% 0 auto; width: 100%; height: 116%; transform: translate3d(0, var(--cinematic-y, -4%), 0) scale(var(--cinematic-scale, 1.055)); transform-origin: 50% 52%; transition: none; will-change: transform; }
+.project-card .cinematic-frame :is(img, .cinematic-canvas) { position: absolute; inset: 0; width: 100%; height: 100%; transform: none; transition: none; }
 .project-card .cinematic-frame img { z-index: 0; object-fit: cover; }
 .project-card .cinematic-frame .cinematic-canvas { z-index: 1; display: block; opacity: 0; transition: opacity .7s ease; }
 .project-card .cinematic-frame .cinematic-canvas.ready { opacity: 1; }
-.project-card:hover .cinematic-frame :is(img, .cinematic-canvas) { transform: translate3d(0, var(--cinematic-y, -4%), 0) scale(var(--cinematic-scale, 1.055)); }
+.project-card:hover .cinematic-frame img { transform: none; }
 .cinematic-caption { position: absolute; z-index: 2; left: clamp(1.2rem, 3vw, 3rem); right: clamp(1.2rem, 3vw, 3rem); bottom: clamp(1.2rem, 3vw, 2.5rem); display: flex; justify-content: space-between; color: var(--white); font-size: .68rem; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; text-shadow: 0 1px 18px rgba(0,0,0,.35); }
 .cinematic-progress { position: absolute; z-index: 3; left: 0; bottom: 0; width: 100%; height: 3px; background: #d7b98b; transform: scaleX(var(--cinematic-progress, 0)); transform-origin: left center; will-change: transform; }
 .project-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; padding-block: 2.2rem 7rem; border-bottom: 1px solid var(--line); }
@@ -210,7 +212,6 @@ button { font: inherit; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .reveal { opacity: 1; transform: none; }
-  .project-card .cinematic-frame :is(img, .cinematic-canvas), .project-card:hover .cinematic-frame :is(img, .cinematic-canvas) { inset: 0; height: 100%; transform: none; }
-  .cinematic-canvas { display: none !important; }
+  .cinematic-canvas, .hero-canvas { display: none !important; }
   .cinematic-progress { display: none; }
 }

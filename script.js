@@ -64,36 +64,7 @@ projectDialog.addEventListener('close', () => {
   dialogImage.src = '';
 });
 
-const cinematicScenes = [...document.querySelectorAll('[data-cinematic]')];
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-let cinematicFrame;
-
-const updateCinematicScenes = () => {
-  cinematicFrame = null;
-  if (reducedMotion.matches) return;
-
-  cinematicScenes.forEach((scene) => {
-    const rect = scene.querySelector('.cinematic-frame').getBoundingClientRect();
-    const viewport = window.innerHeight;
-    const progress = Math.min(1, Math.max(0, (viewport - rect.top) / (viewport + rect.height)));
-    const travel = -4 + (progress * 8);
-    const scale = 1.055 - (progress * .035);
-    scene.style.setProperty('--cinematic-y', `${travel.toFixed(3)}%`);
-    scene.style.setProperty('--cinematic-scale', scale.toFixed(4));
-    scene.style.setProperty('--cinematic-progress', progress.toFixed(4));
-  });
-};
-
-const requestCinematicUpdate = () => {
-  if (!cinematicFrame) cinematicFrame = requestAnimationFrame(updateCinematicScenes);
-};
-
-if (cinematicScenes.length) {
-  updateCinematicScenes();
-  window.addEventListener('scroll', requestCinematicUpdate, { passive: true });
-  window.addEventListener('resize', requestCinematicUpdate);
-  reducedMotion.addEventListener('change', requestCinematicUpdate);
-}
 
 const vertexShaderSource = `
   attribute vec2 a_position;
@@ -109,12 +80,19 @@ const fragmentShaderSource = `
   uniform sampler2D u_image;
   uniform float u_time;
   uniform float u_pan;
+  uniform float u_scene;
   uniform vec2 u_view;
   uniform vec2 u_image_size;
   varying vec2 v_uv;
 
   float ellipseMask(vec2 point, vec2 center, vec2 size) {
-    return 1.0 - smoothstep(0.72, 1.0, length((point - center) / size));
+    return 1.0 - smoothstep(0.78, 1.0, length((point - center) / size));
+  }
+
+  float softBox(vec2 point, vec2 lower, vec2 upper, float edge) {
+    vec2 start = smoothstep(lower, lower + vec2(edge), point);
+    vec2 end = 1.0 - smoothstep(upper - vec2(edge), upper, point);
+    return start.x * start.y * end.x * end.y;
   }
 
   void main() {
@@ -128,33 +106,48 @@ const fragmentShaderSource = `
     }
 
     vec2 uv = (v_uv - 0.5) * cover + 0.5;
-    uv.x += (u_pan - 0.5) * (1.0 - cover.x) * 0.94;
+    uv.x += (u_pan - 0.5) * (1.0 - cover.x) * 0.96;
     vec2 point = vec2(uv.x, 1.0 - uv.y);
     vec3 original = texture2D(u_image, uv).rgb;
+    float isHero = step(0.5, u_scene);
 
-    float waterBand = smoothstep(0.50, 0.56, point.y) * (1.0 - smoothstep(0.73, 0.79, point.y));
-    float waterWidth = 1.0 - smoothstep(0.72, 0.91, point.x);
-    float coolSurface = smoothstep(0.32, 0.67, clamp((original.b - original.r) * 3.0 + 0.54, 0.0, 1.0));
-    float water = waterBand * waterWidth * (0.28 + coolSurface * 0.72);
+    // The masks stay in image coordinates, so masonry, glazing and furniture
+    // never wobble as the camera moves across the panorama.
+    float projectWater = softBox(point, vec2(0.29, 0.55), vec2(0.67, 0.68), 0.025);
+    float heroWater = softBox(point, vec2(0.41, 0.66), vec2(0.96, 0.81), 0.035);
+    float water = mix(projectWater, heroWater, isHero);
 
-    float upperBranches = ellipseMask(point, vec2(0.12, 0.09), vec2(0.34, 0.16));
-    float centerTree = ellipseMask(point, vec2(0.47, 0.36), vec2(0.18, 0.24));
-    float rightTree = ellipseMask(point, vec2(0.90, 0.28), vec2(0.17, 0.28));
-    float foregroundGrass = ellipseMask(point, vec2(0.34, 0.88), vec2(0.48, 0.19)) * (1.0 - smoothstep(0.72, 0.90, point.x));
-    float foliage = clamp(upperBranches * 0.75 + centerTree + rightTree * 0.8 + foregroundGrass * 0.48, 0.0, 1.0);
+    float projectLeaves =
+      softBox(point, vec2(0.02, 0.01), vec2(0.37, 0.22), 0.04) +
+      ellipseMask(point, vec2(0.57, 0.31), vec2(0.075, 0.15)) +
+      softBox(point, vec2(0.88, 0.13), vec2(1.0, 0.44), 0.04) +
+      softBox(point, vec2(0.02, 0.77), vec2(0.44, 1.0), 0.06) +
+      softBox(point, vec2(0.70, 0.80), vec2(1.0, 1.0), 0.06);
+    float heroLeaves =
+      softBox(point, vec2(0.81, 0.01), vec2(1.0, 0.30), 0.04) +
+      softBox(point, vec2(0.02, 0.75), vec2(0.39, 1.0), 0.06) +
+      softBox(point, vec2(0.62, 0.86), vec2(1.0, 1.0), 0.05);
+    float leafColor = smoothstep(-0.08, 0.06, original.g - original.b) *
+      (1.0 - smoothstep(0.08, 0.26, original.r - original.g));
+    float foliage = clamp(mix(projectLeaves, heroLeaves, isHero), 0.0, 1.0) * leafColor;
+
+    float skyLimit = mix(0.46, 0.19, smoothstep(0.35, 0.67, point.x));
+    float clouds = isHero * (1.0 - smoothstep(skyLimit - 0.06, skyLimit, point.y)) *
+      (1.0 - smoothstep(0.80, 0.91, point.x));
 
     float rippleA = sin(point.x * 96.0 + u_time * 1.75 + sin(point.y * 33.0));
     float rippleB = sin(point.x * 51.0 - u_time * 1.10 + point.y * 74.0);
     float rippleC = sin(point.y * 128.0 + u_time * 0.82);
-    vec2 motion = vec2((rippleA * 0.00135 + rippleB * 0.0008), rippleC * 0.00042) * water;
+    vec2 motion = vec2((rippleA * 0.0020 + rippleB * 0.0011), rippleC * 0.00065) * water;
 
     float breeze = sin(u_time * 0.72 + point.y * 17.0) + sin(u_time * 1.08 + point.x * 13.0) * 0.42;
-    motion.x += breeze * 0.00135 * foliage;
-    motion.y += sin(u_time * 0.56 + point.x * 11.0) * 0.00038 * foliage;
+    motion.x += breeze * 0.0018 * foliage;
+    motion.y += sin(u_time * 0.56 + point.x * 11.0) * 0.0007 * foliage;
+    motion.x += clouds * (sin(u_time * 0.19 + point.y * 4.0) * 0.0030 + sin(u_time * 0.11) * 0.0012);
 
     vec3 color = texture2D(u_image, clamp(uv + motion, 0.001, 0.999)).rgb;
     float shimmer = (sin(point.x * 118.0 - u_time * 1.6 + point.y * 29.0) * 0.5 + 0.5) * water;
-    color += vec3(0.012, 0.018, 0.021) * shimmer;
+    color += vec3(0.022, 0.030, 0.033) * shimmer;
     gl_FragColor = vec4(color, 1.0);
   }
 `;
@@ -172,8 +165,9 @@ const compileShader = (gl, type, source) => {
 
 const startLivingScene = (canvas) => {
   if (reducedMotion.matches) return;
-  const frame = canvas.closest('.cinematic-frame');
+  const frame = canvas.closest('[data-living-scene-container]');
   const image = frame.querySelector('[data-cinematic-image]');
+  const isHero = canvas.dataset.scene === 'hero';
   const gl = canvas.getContext('webgl', {
     alpha: false,
     antialias: false,
@@ -211,15 +205,18 @@ const startLivingScene = (canvas) => {
 
   const timeLocation = gl.getUniformLocation(program, 'u_time');
   const panLocation = gl.getUniformLocation(program, 'u_pan');
+  const sceneLocation = gl.getUniformLocation(program, 'u_scene');
   const viewLocation = gl.getUniformLocation(program, 'u_view');
   const imageSizeLocation = gl.getUniformLocation(program, 'u_image_size');
   gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
+  gl.uniform1f(sceneLocation, isHero ? 1 : 0);
   gl.uniform2f(imageSizeLocation, image.naturalWidth, image.naturalHeight);
 
   let isVisible = false;
   let isRunning = false;
   let needsResize = true;
   const startedAt = performance.now();
+  const clamp = (value) => Math.min(1, Math.max(0, value));
 
   const resize = () => {
     const rect = canvas.getBoundingClientRect();
@@ -242,14 +239,16 @@ const startLivingScene = (canvas) => {
       return;
     }
     if (needsResize) resize();
-    const frameRect = frame.getBoundingClientRect();
-    const panProgress = Math.min(1, Math.max(0, (window.innerHeight - frameRect.top) / (window.innerHeight + frameRect.height)));
     const elapsed = now - startedAt;
-    const scrollPan = 0.04 + panProgress * 0.92;
-    const cameraDrift = Math.sin(elapsed / 3600) * 0.10;
+    const frameRect = frame.getBoundingClientRect();
+    const scrollProgress = clamp((window.innerHeight - frameRect.top) / (window.innerHeight + frameRect.height));
+    const openingProgress = clamp(elapsed / 13000);
+    const easedOpening = openingProgress * openingProgress * (3 - 2 * openingProgress);
+    const panProgress = isHero ? 0.18 + easedOpening * 0.80 : 0.04 + scrollProgress * 0.92;
     gl.uniform1f(timeLocation, elapsed / 1000);
-    gl.uniform1f(panLocation, Math.min(0.98, Math.max(0.02, scrollPan + cameraDrift)));
+    gl.uniform1f(panLocation, panProgress);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+    if (!isHero) frame.style.setProperty('--cinematic-progress', scrollProgress.toFixed(4));
     canvas.classList.add('ready');
     canvas.dataset.animated = 'true';
     requestAnimationFrame(render);
@@ -277,7 +276,7 @@ const startLivingScene = (canvas) => {
 };
 
 document.querySelectorAll('[data-living-scene]').forEach((canvas) => {
-  const image = canvas.closest('.cinematic-frame').querySelector('[data-cinematic-image]');
+  const image = canvas.closest('[data-living-scene-container]').querySelector('[data-cinematic-image]');
   if (image.complete && image.naturalWidth) startLivingScene(canvas);
   else image.addEventListener('load', () => startLivingScene(canvas), { once: true });
 });

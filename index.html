@@ -34,8 +34,9 @@
     </header>
 
     <main id="conteudo">
-      <section id="inicio" class="hero" aria-labelledby="titulo-principal">
-        <img src="assets/hero-residencia.png" alt="Residência contemporânea em pedra e madeira, integrada à paisagem montanhosa ao entardecer" fetchpriority="high" />
+      <section id="inicio" class="hero" data-living-scene-container aria-labelledby="titulo-principal">
+        <img data-cinematic-image src="assets/hero-residencia-280.png" alt="Vista panorâmica de residência contemporânea com piscina e montanhas ao entardecer" fetchpriority="high" />
+        <canvas class="hero-canvas" data-living-scene data-scene="hero" aria-hidden="true"></canvas>
         <div class="hero-shade"></div>
         <div class="hero-content">
           <p class="eyebrow"><span></span> Arquitetura residencial</p>
@@ -67,7 +68,7 @@
         </div>
 
         <article class="project-card project-large reveal" data-cinematic>
-          <figure class="cinematic-frame">
+          <figure class="cinematic-frame" data-living-scene-container>
             <img data-cinematic-image src="assets/residencia-serra-240.png" alt="Vista panorâmica de residência contemporânea com piscina, jardim e serra" loading="lazy" />
             <canvas class="cinematic-canvas" data-living-scene aria-hidden="true"></canvas>
             <div class="cinematic-caption" aria-hidden="true"><span>Vista panorâmica 240°</span><span>Cena viva · água &amp; paisagem</span></div>
